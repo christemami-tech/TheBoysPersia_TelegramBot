@@ -1,7 +1,7 @@
-CHANNELS = ["@channel1", "@channel2"]
+CHANNELS = ["@TheBoysinTelegram"]
 
 movies = {
-    "film1": "FILE_ID_1",
+    "film1": "AgACAgQAAxkBAAMWajkmex95oJF1P7f-5HzMaW43OB8AAgwVaxuDoslRq_IfDHVL4V0BAAMCAAN4AAM8BA",
     "film2": "FILE_ID_2",
     "film3": "FILE_ID_3",
     "film4": "FILE_ID_4",
