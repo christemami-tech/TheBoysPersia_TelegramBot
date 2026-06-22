@@ -35,7 +35,7 @@ movies = {
 "film30": {"type": "video", "file_id": "..."},
 
 # PHOTO 1-30
-"photo1": {"type": "photo", "file_id": "..."},
+"photo1": {"type": "photo", "AgACAgQAAxkBAAMWajkmex95oJF1P7f-5HzMaW43OB8AAgwVaxuDoslRq_IfDHVL4V0BAAMCAAN4AAM8BA": "..."},
 "photo2": {"type": "photo", "file_id": "..."},
 "photo3": {"type": "photo", "file_id": "..."},
 "photo4": {"type": "photo", "file_id": "..."},
