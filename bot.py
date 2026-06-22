@@ -9,7 +9,7 @@ CHANNELS = ["@TheBoysinTelegram", "t.me/+nP7TF4ffoCIwZTZh", "@DrDoctorMeme"]
 
 # فیلم‌ها (بعداً file_id اینجا قرار می‌گیره)
 movies = {
-    "film1": "FILE_ID_HERE"
+    "film1": "BAACAgQAAxkBAAMIajkh_DWv2QFg47JFNg1uv9x8LMoAApUcAAKn6sFRm5aI2hDZHmw8BA"
 }
 
 # بررسی عضویت در کانال‌ها
