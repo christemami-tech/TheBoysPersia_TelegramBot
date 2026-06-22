@@ -1,5 +1,5 @@
-CHANNELS = ["@channel1", "@channel2", "@channel3"]
+CHANNELS = ["@channel1","@channel2"]
 
 movies = {
-    "film1": "FILE_ID_HERE"
+    "film1": "BAACAgQAAxkBAAMIajkh_DWv2QFg47JFNg1uv9x8LMoAApUcAAKn6sFRm5aI2hDZHmw8BA"
 }
