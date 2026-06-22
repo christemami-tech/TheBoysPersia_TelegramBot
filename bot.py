@@ -20,6 +20,7 @@ def check_membership(user_id):
             return False
     return True
 
+
 # ======================
 # دکمه عضویت
 # ======================
@@ -44,6 +45,35 @@ def join_markup():
 
     return markup
 
+
+# ======================
+# ارسال فایل (هر نوع)
+# ======================
+def send_media(chat_id, item):
+
+    if not item:
+        bot.send_message(chat_id, "❌ فایل پیدا نشد")
+        return
+
+    file_type = item["type"]
+    file_id = item["file_id"]
+
+    if file_type == "video":
+        bot.send_video(chat_id, file_id)
+
+    elif file_type == "photo":
+        bot.send_photo(chat_id, file_id)
+
+    elif file_type == "audio":
+        bot.send_audio(chat_id, file_id)
+
+    elif file_type == "document":
+        bot.send_document(chat_id, file_id)
+
+    else:
+        bot.send_message(chat_id, "❌ نوع فایل پشتیبانی نمی‌شود")
+
+
 # ======================
 # گرفتن فایل فقط برای ادمین
 # ======================
@@ -53,18 +83,27 @@ def get_file(message):
     if not is_admin(message.from_user.id):
         return
 
-    file_id = None
-
     if message.content_type == 'video':
         file_id = message.video.file_id
+        file_type = "video"
+
     elif message.content_type == 'photo':
         file_id = message.photo[-1].file_id
+        file_type = "photo"
+
     elif message.content_type == 'audio':
         file_id = message.audio.file_id
+        file_type = "audio"
+
     elif message.content_type == 'document':
         file_id = message.document.file_id
+        file_type = "document"
 
-    bot.send_message(message.chat.id, f"📌 FILE ID:\n{file_id}")
+    bot.send_message(
+        message.chat.id,
+        f"type: {file_type}\nfile_id: {file_id}"
+    )
+
 
 # ======================
 # پنل ادمین
@@ -78,8 +117,9 @@ def admin_panel(message):
 
     bot.send_message(
         message.chat.id,
-        "🧑‍💼 پنل ادمین:\n\n/add 7736093011 ➜ اضافه کردن ادمین\n/remove 123456789 ➜ حذف ادمین"
+        "🧑‍💼 پنل ادمین:\n\n/add USER_ID ➜ اضافه کردن ادمین\n/remove USER_ID ➜ حذف ادمین"
     )
+
 
 # ======================
 # اضافه کردن ادمین
@@ -97,6 +137,7 @@ def add(message):
     except:
         bot.send_message(message.chat.id, "❌ فرمت اشتباه")
 
+
 # ======================
 # حذف ادمین
 # ======================
@@ -113,6 +154,7 @@ def remove(message):
     except:
         bot.send_message(message.chat.id, "❌ فرمت اشتباه")
 
+
 # ======================
 # START
 # ======================
@@ -122,7 +164,8 @@ def start(message):
     args = message.text.split()
 
     if len(args) > 1:
-        movie_id = args[1]
+
+        media_id = args[1]
 
         if not check_membership(message.from_user.id):
             bot.send_message(
@@ -132,23 +175,28 @@ def start(message):
             )
             return
 
-        bot.send_message(message.chat.id, "🎬 در حال ارسال فیلم...")
+        item = movies.get(media_id)
 
-        bot.send_video(
-            message.chat.id,
-            movies.get(movie_id, "❌ فیلم پیدا نشد")
-        )
+        if not item:
+            bot.send_message(message.chat.id, "❌ فایل پیدا نشد")
+            return
+
+        bot.send_message(message.chat.id, "📥 در حال ارسال فایل...")
+
+        send_media(message.chat.id, item)
 
     else:
         markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("🎬 دریافت فیلم", callback_data="go")
-        markup.add(btn)
+        markup.add(
+            types.InlineKeyboardButton("🎬 دریافت فایل", callback_data="go")
+        )
 
         bot.send_message(
             message.chat.id,
             "👋 خوش آمدید",
             reply_markup=markup
         )
+
 
 # ======================
 # CALLBACK
@@ -165,18 +213,22 @@ def callback(call):
     elif call.data == "check_membership":
 
         if check_membership(call.from_user.id):
-            bot.send_message(call.message.chat.id, "🎬 تایید شد! در حال ارسال فیلم...")
 
-            bot.send_video(
+            bot.send_message(
                 call.message.chat.id,
-                list(movies.values())[0]
+                "🎬 تایید شد! در حال ارسال فایل..."
             )
 
+            first_item = list(movies.values())[0]
+            send_media(call.message.chat.id, first_item)
+
         else:
+
             bot.send_message(
                 call.message.chat.id,
                 "❌ هنوز عضو همه کانال‌ها نیستی!",
                 reply_markup=join_markup()
             )
+
 
 bot.polling()
