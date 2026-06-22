@@ -22,6 +22,21 @@ def check_membership(user_id):
 
 
 # ======================
+# منوی ادمین (دکمه‌ای)
+# ======================
+def admin_markup():
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("➕ Add Media", callback_data="add_media"),
+        types.InlineKeyboardButton("🗑 Delete Media", callback_data="del_media")
+    )
+    markup.add(
+        types.InlineKeyboardButton("📋 List Media", callback_data="list_media")
+    )
+    return markup
+
+
+# ======================
 # دکمه عضویت
 # ======================
 def join_markup():
@@ -47,7 +62,7 @@ def join_markup():
 
 
 # ======================
-# ارسال فایل (هر نوع)
+# ارسال فایل
 # ======================
 def send_media(chat_id, item):
 
@@ -55,33 +70,45 @@ def send_media(chat_id, item):
         bot.send_message(chat_id, "❌ فایل پیدا نشد")
         return
 
-    file_type = item["type"]
-    file_id = item["file_id"]
+    t = item["type"]
+    f = item["file_id"]
 
-    if file_type == "video":
-        bot.send_video(chat_id, file_id)
-
-    elif file_type == "photo":
-        bot.send_photo(chat_id, file_id)
-
-    elif file_type == "audio":
-        bot.send_audio(chat_id, file_id)
-
-    elif file_type == "document":
-        bot.send_document(chat_id, file_id)
-
+    if t == "video":
+        bot.send_video(chat_id, f)
+    elif t == "photo":
+        bot.send_photo(chat_id, f)
+    elif t == "audio":
+        bot.send_audio(chat_id, f)
+    elif t == "document":
+        bot.send_document(chat_id, f)
     else:
-        bot.send_message(chat_id, "❌ نوع فایل پشتیبانی نمی‌شود")
+        bot.send_message(chat_id, "❌ نوع فایل ناشناخته")
 
 
 # ======================
-# گرفتن فایل فقط برای ادمین
+# حافظه موقت برای پنل ادمین
+# ======================
+pending = {}  # user_id -> action
+
+
+# ======================
+# گرفتن فایل از ادمین (برای اضافه کردن)
 # ======================
 @bot.message_handler(content_types=['video', 'photo', 'audio', 'document'])
 def get_file(message):
 
     if not is_admin(message.from_user.id):
         return
+
+    user_id = message.from_user.id
+
+    if user_id not in pending:
+        return
+
+    action = pending[user_id]
+
+    file_id = None
+    file_type = None
 
     if message.content_type == 'video':
         file_id = message.video.file_id
@@ -99,9 +126,18 @@ def get_file(message):
         file_id = message.document.file_id
         file_type = "document"
 
+    # ذخیره در movies (موقت)
+    key = f"{file_type}_{len(movies)+1}"
+    movies[key] = {
+        "type": file_type,
+        "file_id": file_id
+    }
+
+    pending.pop(user_id)
+
     bot.send_message(
         message.chat.id,
-        f"type: {file_type}\nfile_id: {file_id}"
+        f"✅ اضافه شد!\n\nkey: {key}\ntype: {file_type}"
     )
 
 
@@ -117,42 +153,38 @@ def admin_panel(message):
 
     bot.send_message(
         message.chat.id,
-        "🧑‍💼 پنل ادمین:\n\n/add USER_ID ➜ اضافه کردن ادمین\n/remove USER_ID ➜ حذف ادمین"
+        "🧑‍💼 پنل ادمین",
+        reply_markup=admin_markup()
     )
 
 
 # ======================
-# اضافه کردن ادمین
+# Callback های پنل
 # ======================
-@bot.message_handler(commands=['add'])
-def add(message):
+@bot.callback_query_handler(func=lambda call: True)
+def callback(call):
 
-    if not is_admin(message.from_user.id):
-        return
+    # start panel
+    if call.data == "add_media":
+        pending[call.from_user.id] = "add"
+        bot.send_message(call.message.chat.id, "📥 حالا فایل (ویدیو/عکس/صدا) بفرست")
 
-    try:
-        user_id = int(message.text.split()[1])
-        add_admin(user_id)
-        bot.send_message(message.chat.id, f"✅ اضافه شد: {user_id}")
-    except:
-        bot.send_message(message.chat.id, "❌ فرمت اشتباه")
+    elif call.data == "del_media":
+        bot.send_message(call.message.chat.id, "❌ برای حذف: کلید فیلم را بفرست (مثلا film1)")
+        pending[call.from_user.id] = "delete"
 
+    elif call.data == "list_media":
+        txt = "\n".join(movies.keys())
+        bot.send_message(call.message.chat.id, f"📋 لیست:\n\n{txt}")
 
-# ======================
-# حذف ادمین
-# ======================
-@bot.message_handler(commands=['remove'])
-def remove(message):
+    elif call.data == "check_membership":
 
-    if not is_admin(message.from_user.id):
-        return
-
-    try:
-        user_id = int(message.text.split()[1])
-        remove_admin(user_id)
-        bot.send_message(message.chat.id, f"❌ حذف شد: {user_id}")
-    except:
-        bot.send_message(message.chat.id, "❌ فرمت اشتباه")
+        if check_membership(call.from_user.id):
+            bot.send_message(call.message.chat.id, "🎬 تایید شد!")
+            first_item = list(movies.values())[0]
+            send_media(call.message.chat.id, first_item)
+        else:
+            bot.send_message(call.message.chat.id, "❌ عضو نیستی", reply_markup=join_markup())
 
 
 # ======================
@@ -168,67 +200,22 @@ def start(message):
         media_id = args[1]
 
         if not check_membership(message.from_user.id):
-            bot.send_message(
-                message.chat.id,
-                "🎀 برای استفاده از ربات باید عضو کانال‌ها باشید:",
-                reply_markup=join_markup()
-            )
+            bot.send_message(message.chat.id, "🎀 اول عضو شو", reply_markup=join_markup())
             return
 
         item = movies.get(media_id)
 
         if not item:
-            bot.send_message(message.chat.id, "❌ فایل پیدا نشد")
+            bot.send_message(message.chat.id, "❌ پیدا نشد")
             return
-
-        bot.send_message(message.chat.id, "📥 در حال ارسال فایل...")
 
         send_media(message.chat.id, item)
 
     else:
         markup = types.InlineKeyboardMarkup()
-        markup.add(
-            types.InlineKeyboardButton("🎬 دریافت فایل", callback_data="go")
-        )
+        markup.add(types.InlineKeyboardButton("🎬 دریافت", callback_data="go"))
 
-        bot.send_message(
-            message.chat.id,
-            "👋 خوش آمدید",
-            reply_markup=markup
-        )
-
-
-# ======================
-# CALLBACK
-# ======================
-@bot.callback_query_handler(func=lambda call: True)
-def callback(call):
-
-    if call.data == "go":
-        bot.send_message(
-            call.message.chat.id,
-            "از لینک فیلم استفاده کن:\n\nhttps://t.me/TheBoysPersiaBot?start=film1"
-        )
-
-    elif call.data == "check_membership":
-
-        if check_membership(call.from_user.id):
-
-            bot.send_message(
-                call.message.chat.id,
-                "🎬 تایید شد! در حال ارسال فایل..."
-            )
-
-            first_item = list(movies.values())[0]
-            send_media(call.message.chat.id, first_item)
-
-        else:
-
-            bot.send_message(
-                call.message.chat.id,
-                "❌ هنوز عضو همه کانال‌ها نیستی!",
-                reply_markup=join_markup()
-            )
+        bot.send_message(message.chat.id, "👋 خوش آمدی", reply_markup=markup)
 
 
 bot.polling()
