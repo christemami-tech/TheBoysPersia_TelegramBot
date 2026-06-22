@@ -4,15 +4,12 @@ import telebot
 TOKEN = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-# کانال‌ها رو اینجا عوض کن
-CHANNELS = ["@TheBoysinTelegram", "t.me/+nP7TF4ffoCIwZTZh", "@DrDoctorMeme"]
+CHANNELS = ["@TheBoysinTelegram", "@DrDoctorMeme"]
 
-# فیلم‌ها (بعداً file_id اینجا قرار می‌گیره)
 movies = {
     "film1": "BAACAgQAAxkBAAMIajkh_DWv2QFg47JFNg1uv9x8LMoAApUcAAKn6sFRm5aI2hDZHmw8BA"
 }
 
-# بررسی عضویت در کانال‌ها
 def check_membership(user_id):
     for ch in CHANNELS:
         try:
@@ -23,35 +20,62 @@ def check_membership(user_id):
             return False
     return True
 
-# گرفتن file_id از ویدیو (برای خودت)
 @bot.message_handler(content_types=['video'])
 def get_video(message):
     file_id = message.video.file_id
     bot.send_message(message.chat.id, f"FILE ID:\n{file_id}")
 
-# /start با لینک فیلم
+def start_menu():
+    markup = telebot.types.InlineKeyboardMarkup()
+
+    btn1 = telebot.types.InlineKeyboardButton("🎬 دریافت فیلم", callback_data="get_film")
+    btn2 = telebot.types.InlineKeyboardButton("📢 کانال‌ها", callback_data="channels")
+
+    markup.add(btn1)
+    markup.add(btn2)
+    return markup
+
 @bot.message_handler(commands=['start'])
 def start(message):
-    args = message.text.split()
+    bot.send_message(
+        message.chat.id,
+        "🎀 خوش آمدید\nاز دکمه‌ها استفاده کنید:",
+        reply_markup=start_menu()
+    )
 
-    # اگر لینک فیلم داشت
-    if len(args) > 1:
-        movie_id = args[1]
+@bot.callback_query_handler(func=lambda call: True)
+def callback(call):
 
-        if not check_membership(message.from_user.id):
-            bot.send_message(message.chat.id, "🎀برای استفاده از ربات لطفا داخل کانالهای زیر عضو شوید:")
+    if call.data == "channels":
+        text = "📢 برای استفاده باید عضو این کانال‌ها شوید:\n\n"
+        text += "\n".join(CHANNELS)
+
+        bot.send_message(call.message.chat.id, text)
+
+    elif call.data == "get_film":
+
+        if not check_membership(call.from_user.id):
+            markup = telebot.types.InlineKeyboardMarkup()
+
+            btn = telebot.types.InlineKeyboardButton(
+                "📢 رفتن به کانال‌ها",
+                url=f"https://t.me/{CHANNELS[0].replace('@','')}"
+            )
+
+            markup.add(btn)
+
+            bot.send_message(
+                call.message.chat.id,
+                "❌ برای استفاده باید عضو کانال‌ها شوید",
+                reply_markup=markup
+            )
             return
 
-        bot.send_message(message.chat.id, "🎬 در حال ارسال فیلم...")
+        bot.send_message(call.message.chat.id, "🎬 در حال ارسال فیلم...")
 
         bot.send_message(
-            message.chat.id,
-            movies.get(movie_id, "🪖 ویدیو منقضی شده است")
-        )
-    else:
-        bot.send_message(
-            message.chat.id,
-            "👋 خوش آمدید\nبرای دریافت فیلم از لینک استفاده کنید"
+            call.message.chat.id,
+            movies["film1"]
         )
 
 bot.polling()
