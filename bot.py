@@ -67,6 +67,6 @@ def start(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     if call.data == "go":
-        bot.send_message(call.message.chat.id, "از لینک فیلم استفاده کن:\n\nhttps://t.me/YOUR_BOT?start=film1")
+        bot.send_message(call.message.chat.id, "از لینک فیلم استفاده کن:\n\nhttps://t.me/TheBoysPersiaBot?start=film1")
 
 bot.polling()
