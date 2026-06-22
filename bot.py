@@ -2,6 +2,7 @@ import os
 import telebot
 from telebot import types
 from config import CHANNELS, movies
+from admin import is_admin, add_admin, remove_admin
 
 TOKEN = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
@@ -20,7 +21,7 @@ def check_membership(user_id):
     return True
 
 # ======================
-# دکمه عضویت کانال‌ها + بررسی عضویت
+# دکمه عضویت
 # ======================
 def join_markup():
     markup = types.InlineKeyboardMarkup()
@@ -34,7 +35,6 @@ def join_markup():
             )
         )
 
-    # دکمه سبز بررسی عضویت
     markup.add(
         types.InlineKeyboardButton(
             "✅ بررسی عضویت",
@@ -45,18 +45,80 @@ def join_markup():
     return markup
 
 # ======================
-# گرفتن file_id (برای خودت)
+# گرفتن فایل فقط برای ادمین
 # ======================
-@bot.message_handler(content_types=['video'])
-def get_video(message):
-    file_id = message.video.file_id
-    bot.send_message(message.chat.id, file_id)
+@bot.message_handler(content_types=['video', 'photo', 'audio', 'document'])
+def get_file(message):
+
+    if not is_admin(message.from_user.id):
+        return
+
+    file_id = None
+
+    if message.content_type == 'video':
+        file_id = message.video.file_id
+    elif message.content_type == 'photo':
+        file_id = message.photo[-1].file_id
+    elif message.content_type == 'audio':
+        file_id = message.audio.file_id
+    elif message.content_type == 'document':
+        file_id = message.document.file_id
+
+    bot.send_message(message.chat.id, f"📌 FILE ID:\n{file_id}")
 
 # ======================
-# /start
+# پنل ادمین
+# ======================
+@bot.message_handler(commands=['admin'])
+def admin_panel(message):
+
+    if not is_admin(message.from_user.id):
+        bot.send_message(message.chat.id, "❌ دسترسی ندارید")
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "🧑‍💼 پنل ادمین:\n\n/add 123456789 ➜ اضافه کردن ادمین\n/remove 123456789 ➜ حذف ادمین"
+    )
+
+# ======================
+# اضافه کردن ادمین
+# ======================
+@bot.message_handler(commands=['add'])
+def add(message):
+
+    if not is_admin(message.from_user.id):
+        return
+
+    try:
+        user_id = int(message.text.split()[1])
+        add_admin(user_id)
+        bot.send_message(message.chat.id, f"✅ اضافه شد: {user_id}")
+    except:
+        bot.send_message(message.chat.id, "❌ فرمت اشتباه")
+
+# ======================
+# حذف ادمین
+# ======================
+@bot.message_handler(commands=['remove'])
+def remove(message):
+
+    if not is_admin(message.from_user.id):
+        return
+
+    try:
+        user_id = int(message.text.split()[1])
+        remove_admin(user_id)
+        bot.send_message(message.chat.id, f"❌ حذف شد: {user_id}")
+    except:
+        bot.send_message(message.chat.id, "❌ فرمت اشتباه")
+
+# ======================
+# START
 # ======================
 @bot.message_handler(commands=['start'])
 def start(message):
+
     args = message.text.split()
 
     if len(args) > 1:
@@ -89,19 +151,17 @@ def start(message):
         )
 
 # ======================
-# دکمه‌ها
+# CALLBACK
 # ======================
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
 
-    # دکمه شروع
     if call.data == "go":
         bot.send_message(
             call.message.chat.id,
             "از لینک فیلم استفاده کن:\n\nhttps://t.me/TheBoysPersiaBot?start=film1"
         )
 
-    # دکمه بررسی عضویت
     elif call.data == "check_membership":
 
         if check_membership(call.from_user.id):
