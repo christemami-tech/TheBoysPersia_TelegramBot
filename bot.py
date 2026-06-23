@@ -1,5 +1,7 @@
 import os
 import telebot
+import time
+import threading
 from telebot import types
 from config import CHANNELS, movies, ADMIN_ID
 
@@ -29,75 +31,88 @@ def check_membership(user_id):
 
 
 # ======================
-# پیدا کردن slot خالی
+# ارسال فایل + ویو + حذف 40 ثانیه
 # ======================
-def get_next_slot(file_type):
-    data = movies[file_type]
+def send_media(chat_id, key, item):
 
-    i = 1
-    while True:
-        key = f"{file_type}{i}"
-        if key not in data:
-            return key
-        i += 1
+    if not item:
+        bot.send_message(chat_id, "❌ فایل پیدا نشد")
+        return
 
+    # 👁 ویو
+    item["views"] = item.get("views", 0) + 1
+    views = item["views"]
 
-# ======================
-# ذخیره فایل
-# ======================
-def save_file(file_type, file_id, name=None):
-    if not name:
-        name = get_next_slot(file_type)
+    caption = f"👁 بازدید: {views}\n⏳ این فایل بعد از ۴۰ ثانیه حذف می‌شود"
 
-    movies[file_type][name] = file_id
-    return name
+    msg = None
 
+    if item["type"] == "video":
+        msg = bot.send_video(chat_id, item["file_id"], caption=caption)
 
-# ======================
-# ارسال فایل
-# ======================
-def send_media(chat_id, file_type, file_id):
+    elif item["type"] == "photo":
+        msg = bot.send_photo(chat_id, item["file_id"], caption=caption)
 
-    if file_type == "video":
-        bot.send_video(chat_id, file_id)
+    elif item["type"] == "audio":
+        msg = bot.send_audio(chat_id, item["file_id"], caption=caption)
 
-    elif file_type == "photo":
-        bot.send_photo(chat_id, file_id)
+    elif item["type"] == "document":
+        msg = bot.send_document(chat_id, item["file_id"], caption=caption)
 
-    elif file_type == "audio":
-        bot.send_audio(chat_id, file_id)
+    else:
+        bot.send_message(chat_id, "❌ نوع فایل ناشناخته")
+        return
 
-    elif file_type == "document":
-        bot.send_document(chat_id, file_id)
+    # ⏳ حذف بعد 40 ثانیه
+    def delete_later(chat_id, message_id):
+        time.sleep(40)
+        try:
+            bot.delete_message(chat_id, message_id)
+        except:
+            pass
+
+    threading.Thread(
+        target=delete_later,
+        args=(chat_id, msg.message_id),
+        daemon=True
+    ).start()
 
 
 # ======================
 # پنل ادمین
 # ======================
+def admin_panel_markup():
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("➕ Add File", callback_data="add"),
+        types.InlineKeyboardButton("🗑 Delete File", callback_data="delete")
+    )
+    markup.add(
+        types.InlineKeyboardButton("📋 List Files", callback_data="list")
+    )
+    return markup
+
+
+# ======================
+# حالت موقت
+# ======================
+waiting = {}  # user_id -> action
+
+
+# ======================
+# /admin
+# ======================
 @bot.message_handler(commands=['admin'])
-def admin_panel(message):
+def admin(message):
 
     if not is_admin(message.from_user.id):
         return bot.send_message(message.chat.id, "❌ دسترسی ندارید")
 
-    markup = types.InlineKeyboardMarkup()
-
-    markup.add(types.InlineKeyboardButton("📤 افزودن فیلم", callback_data="add_video"))
-    markup.add(types.InlineKeyboardButton("🖼 افزودن عکس", callback_data="add_photo"))
-    markup.add(types.InlineKeyboardButton("🎧 افزودن صدا", callback_data="add_audio"))
-    markup.add(types.InlineKeyboardButton("📁 افزودن فایل", callback_data="add_doc"))
-
-    bot.send_message(message.chat.id, "🧑‍💼 پنل مدیریت:", reply_markup=markup)
+    bot.send_message(message.chat.id, "🧑‍💼 پنل ادمین", reply_markup=admin_panel_markup())
 
 
 # ======================
-# حالت انتظار (برای آپلود)
-# ======================
-waiting = {}
-
-
-# ======================
-# callback پنل
+# callback ها
 # ======================
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
@@ -105,31 +120,76 @@ def callback(call):
     if not is_admin(call.from_user.id):
         return
 
-    if call.data.startswith("add_"):
-        file_type = call.data.split("_")[1]
-        waiting[call.from_user.id] = file_type
-
-        bot.send_message(
-            call.message.chat.id,
-            f"📥 حالا فایل {file_type} را ارسال کن"
+    # ➕ ADD
+    if call.data == "add":
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton("🎥 Video", callback_data="add_video"),
+            types.InlineKeyboardButton("🖼 Photo", callback_data="add_photo"),
+        )
+        markup.add(
+            types.InlineKeyboardButton("🎧 Audio", callback_data="add_audio"),
+            types.InlineKeyboardButton("📁 Document", callback_data="add_document"),
         )
 
+        bot.send_message(call.message.chat.id, "نوع فایل را انتخاب کن:", reply_markup=markup)
 
-    elif call.data.startswith("get_"):
-        parts = call.data.split("_")
-        file_type = parts[1]
-        name = parts[2]
 
-        file_id = movies[file_type].get(name)
+    elif call.data.startswith("add_"):
+        file_type = call.data.split("_")[1]
+        waiting[call.from_user.id] = {"action": "add", "type": file_type}
 
-        if file_id:
-            send_media(call.message.chat.id, file_type, file_id)
+        bot.send_message(call.message.chat.id, f"📥 حالا فایل {file_type} را ارسال کن")
+
+
+    # 📋 LIST
+    elif call.data == "list":
+
+        text = "📋 لیست فایل‌ها:\n\n"
+
+        for k, v in movies.items():
+            text += f"🔹 {k} → {v['type']} 👁 {v.get('views',0)}\n"
+
+        bot.send_message(call.message.chat.id, text)
+
+
+    # 🗑 DELETE
+    elif call.data == "delete":
+
+        markup = types.InlineKeyboardMarkup()
+
+        for k, v in movies.items():
+            markup.add(
+                types.InlineKeyboardButton(
+                    f"❌ {k}",
+                    callback_data=f"del_{k}"
+                )
+            )
+
+        bot.send_message(call.message.chat.id, "برای حذف انتخاب کن:", reply_markup=markup)
+
+
+    elif call.data.startswith("del_"):
+        key = call.data.split("_", 1)[1]
+
+        if key in movies:
+            del movies[key]
+            bot.send_message(call.message.chat.id, f"🗑 حذف شد: {key}")
         else:
             bot.send_message(call.message.chat.id, "❌ پیدا نشد")
 
 
+    # membership check
+    elif call.data == "check_membership":
+        if check_membership(call.from_user.id):
+            first = list(movies.values())[0]
+            send_media(call.message.chat.id, list(movies.keys())[0], first)
+        else:
+            bot.send_message(call.message.chat.id, "❌ عضو نیستی")
+
+
 # ======================
-# گرفتن فایل از ادمین
+# دریافت فایل
 # ======================
 @bot.message_handler(content_types=['video', 'photo', 'audio', 'document'])
 def get_file(message):
@@ -137,51 +197,57 @@ def get_file(message):
     if not is_admin(message.from_user.id):
         return
 
-    file_type = message.content_type
+    user_id = message.from_user.id
+
+    if user_id not in waiting:
+        return
+
+    file_type = waiting[user_id]["type"]
+
     file_id = None
 
-    if file_type == "video":
+    if message.content_type == "video":
         file_id = message.video.file_id
-    elif file_type == "photo":
+    elif message.content_type == "photo":
         file_id = message.photo[-1].file_id
-    elif file_type == "audio":
+    elif message.content_type == "audio":
         file_id = message.audio.file_id
-    elif file_type == "document":
+    elif message.content_type == "document":
         file_id = message.document.file_id
 
-    if message.from_user.id in waiting:
-        t = waiting.pop(message.from_user.id)
+    key = f"{file_type}{len(movies)+1}"
 
-        name = save_file(t, file_id)
+    movies[key] = {
+        "type": file_type,
+        "file_id": file_id,
+        "views": 0
+    }
 
-        bot.send_message(
-            message.chat.id,
-            f"✅ ذخیره شد\nنوع: {t}\nنام: {name}"
-        )
-    else:
-        bot.send_message(message.chat.id, "⚠️ اول از پنل نوع فایل رو انتخاب کن")
+    waiting.pop(user_id)
+
+    bot.send_message(message.chat.id, f"✅ ذخیره شد: {key}")
 
 
 # ======================
-# START کاربر
+# START
 # ======================
 @bot.message_handler(commands=['start'])
 def start(message):
+
+    if not check_membership(message.from_user.id):
+        return bot.send_message(message.chat.id, "❌ اول عضو کانال شو")
 
     args = message.text.split()
 
     if len(args) > 1:
         key = args[1]
 
-        if not check_membership(message.from_user.id):
-            return bot.send_message(message.chat.id, "عضو کانال‌ها شو")
+        item = movies.get(key)
 
-        for t in movies:
-            if key in movies[t]:
-                send_media(message.chat.id, t, movies[t][key])
-                return
-
-        bot.send_message(message.chat.id, "❌ پیدا نشد")
+        if item:
+            send_media(message.chat.id, key, item)
+        else:
+            bot.send_message(message.chat.id, "❌ پیدا نشد")
 
     else:
         bot.send_message(message.chat.id, "👋 خوش آمدی")
